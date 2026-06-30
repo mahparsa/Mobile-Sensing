@@ -11,10 +11,9 @@ real participant data.
 Straight from GitHub, no need to clone anything:
 
 ```bash
-pip install git+https://github.com/YOUR-USERNAME/YOUR-REPO.git
+pip install "git+https://github.com/mahparsa/Mobile-Sensing.git#subdirectory=Data/Cod
 ```
 
-(swap in your actual GitHub username/repo)
 
 ## Use it as a library
 
