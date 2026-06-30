@@ -16,5 +16,9 @@ dependencies = [
 [project.scripts]
 generate-mobile-data = "mobile_sensing_sim.cli:main"
 
-[tool.setuptools.packages.find]
-include = ["mobile_sensing_sim*"]
+[tool.setuptools]
+packages = ["mobile_sensing_sim"]
+
+[tool.setuptools.package-dir]
+mobile_sensing_sim = "."
+
