@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobile-sensing-sim"
+version = "0.1.0"
+description = "Synthetic mobile sensing dataset generator for mental health / anxiety research prototyping"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+]
+
+[project.scripts]
+generate-mobile-data = "mobile_sensing_sim.cli:main"
+
+[tool.setuptools]
+packages = ["mobile_sensing_sim"]
+
+[tool.setuptools.package-dir]
+mobile_sensing_sim = "."
+
