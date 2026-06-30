@@ -12,6 +12,7 @@ Straight from GitHub, no need to clone anything:
 
 ```bash
 pip install "git+https://github.com/mahparsa/Mobile-Sensing.git#subdirectory=Data/Cod
+
 ```
 
 
