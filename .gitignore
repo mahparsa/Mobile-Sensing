@@ -1,1 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
 
+# Jupyter
+.ipynb_checkpoints/
+
+# CatBoost writes training logs here
+catboost_info/
+
+# Data and outputs (don't commit participant data)
+data/
+results/
