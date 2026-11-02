@@ -1,71 +1,73 @@
-"""Per-fold preprocessing: scaling, outlier removal, oversampling.
-
-Everything here is fitted on the training fold only, to avoid data leakage.
-"""
+"""BLOCK 1: Preprocessing inside each fold (code from the notebook, split into functions)."""
 import numpy as np
 import pandas as pd
-from imblearn.over_sampling import SVMSMOTE
-from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
+from sklearn.neighbors import LocalOutlierFactor
+from imblearn.over_sampling import SVMSMOTE
 
 import config
+from src.feature_selection import select_features
+
+columns_to_normalize = config.SCALE_COLUMNS
 
 
-def scale_per_platform(X_train, X_test, columns, platform_col):
-    """Fit a RobustScaler per platform on train, apply to test. Drops platform column."""
-    X_train, X_test = X_train.copy(), X_test.copy()
-    X_train[columns] = X_train[columns].astype(float)
-    X_test[columns] = X_test[columns].astype(float)
-
-    for platform in X_train[platform_col].unique():
-        train_mask = X_train[platform_col] == platform
-        test_mask = X_test[platform_col] == platform
-
+def scale_per_platform(X_train, X_test):
+    # RobustScaler per platform (fitted on training fold only)
+    X_train = X_train.copy()
+    X_test = X_test.copy()
+    X_train[columns_to_normalize] = X_train[columns_to_normalize].astype(float)
+    X_test[columns_to_normalize] = X_test[columns_to_normalize].astype(float)
+    for p in [1, 0]:
+        tr = X_train['platform'] == p
+        te = X_test['platform'] == p
         scaler = RobustScaler()
-        X_train.loc[train_mask, columns] = scaler.fit_transform(X_train.loc[train_mask, columns])
-        if test_mask.any():
-            X_test.loc[test_mask, columns] = scaler.transform(X_test.loc[test_mask, columns])
+        X_train.loc[tr, columns_to_normalize] = scaler.fit_transform(X_train.loc[tr, columns_to_normalize])
+        if te.any():
+            X_test.loc[te, columns_to_normalize] = scaler.transform(X_test.loc[te, columns_to_normalize])
+    X_train = X_train.drop(columns='platform')
+    X_test = X_test.drop(columns='platform')
+    return X_train, X_test
 
-    return X_train.drop(columns=platform_col), X_test.drop(columns=platform_col)
 
-
-def remove_consistent_outliers(X, y, neighbors_list, contamination, verbose=True):
-    """Remove samples flagged as outliers by LOF for *every* n_neighbors value."""
-    outlier_sets = []
-    for n in neighbors_list:
-        lof = LocalOutlierFactor(n_neighbors=n, contamination=contamination)
+def remove_outliers(X_train, y_train):
+    # LOF
+    X = X_train
+    y = y_train
+    outliers_sets = []
+    neighbors_list = [5, 10, 15, 20, 25, 30]
+    for n_neighbors in neighbors_list:
+        lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=0.05)
         preds = lof.fit_predict(X)
-        idx = set(np.where(preds == -1)[0])
-        outlier_sets.append(idx)
-        if verbose:
-            print(f"  LOF n_neighbors={n}: {len(idx)} outliers")
-
-    consistent = set.intersection(*outlier_sets)
-    if verbose:
-        print(f"  Consistent outliers removed: {len(consistent)}")
-
+        outliers_idx = np.where(preds == -1)[0]
+        outliers_sets.append(set(outliers_idx))
+        print(f"n_neighbors={n_neighbors}: Detected {len(outliers_idx)} outliers")
+    consistent_outliers = set.intersection(*outliers_sets)
+    print(f"Consistently identified outliers across all runs: {len(consistent_outliers)}")
     mask = np.ones(len(X), dtype=bool)
-    mask[list(consistent)] = False
-    return X[mask], y[mask]
+    mask[list(consistent_outliers)] = False
+    X_clean = X[mask]
+    y_clean = y[mask]
+    X_final_cleaned = X_clean
+    y_final_cleaned = y_clean
+    return X_final_cleaned, y_final_cleaned
 
 
-def oversample(X, y, seed, params):
-    """Balance classes with SVMSMOTE."""
-    smote = SVMSMOTE(random_state=seed, **params)
-    X_res, y_res = smote.fit_resample(X, y)
-    return X_res, y_res
+def oversample(X_final_cleaned, y_final_cleaned):
+    # SVMSMOTE
+    X = X_final_cleaned
+    y = y_final_cleaned
+    oversample = SVMSMOTE( sampling_strategy='auto',  random_state=None, k_neighbors=2, m_neighbors=4, svm_estimator=None, out_step=0.5)
+    X_resampled, y_resampled= oversample.fit_resample(X, y)
+    class_counts = pd.Series(y_resampled).value_counts()
+    print(class_counts)
+    X = X_resampled
+    y = y_resampled
+    return X, y
 
 
-def preprocess_fold(X_train, y_train, X_test, verbose=config.VERBOSE):
-    """Full preprocessing for one outer fold. Returns (X_train, y_train, X_test)."""
-    feature_cols = [c for c in X_train.columns if c != config.PLATFORM_COLUMN]
-
-    X_train, X_test = scale_per_platform(X_train, X_test, feature_cols, config.PLATFORM_COLUMN)
-    X_train, y_train = remove_consistent_outliers(
-        X_train, y_train, config.LOF_NEIGHBORS, config.LOF_CONTAMINATION, verbose
-    )
-    X_train, y_train = oversample(X_train, y_train, config.SEED, config.SMOTE_PARAMS)
-
-    if verbose:
-        print("  Class counts after SVMSMOTE:", pd.Series(y_train).value_counts().to_dict())
-    return X_train, y_train, X_test
+def preprocess_fold(X_train, X_test, y_train):
+    X_train, X_test = scale_per_platform(X_train, X_test)
+    X, y = remove_outliers(X_train, y_train)
+    X, y = oversample(X, y)
+    X_new, X_test_new, best_cv_value = select_features(X, y, X_test)
+    return X_new, y, X_test_new, int(best_cv_value)
